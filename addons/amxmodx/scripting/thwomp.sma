@@ -49,6 +49,9 @@
 
 #define MAX_ENT                     32
 #define ADMIN_ACCESS                ADMIN_RCON
+#define PDATA_NEXT_ATTACK           83
+#define XO_CBASEPLAYER              5
+#define XO_CBASEPLAYERWEAPON        4
 #define THWOMP_KEY                  172714
 #define THWOMP_ARRAY_ITEM           pev_iuser1
 #define THWOMP_OWNER                pev_iuser1
@@ -77,7 +80,6 @@ enum
 {
     DTYPE_INT,
     DTYPE_FLOAT,
-    DTYPE_BOOL,
     DTYPE_FLAGS,
     DTYPE_ARRAY_STRING,
     DTYPE_ARRAY_SOUND,
@@ -99,7 +101,7 @@ enum
     FLAG_PENDING            = (1 << 7),
     FLAG_ANGRY              = (1 << 8),
     FLAG_IDLE               = (1 << 9),
-    FLAG_RETREAT            = (1 << 10),
+    FLAG_RAISE            = (1 << 10),
     FLAG_SOUND_ALERT        = (1 << 11),
     FLAG_SOUND_SMASH        = (1 << 12)
 }
@@ -322,7 +324,7 @@ new Array:g_aThwomp,
     g_eSettings[MAIN_SETTINGS],
     g_ePlayerData[MAX_PLAYERS + 1][PLAYER_DATA],
     bool:g_bFileWasRead, g_iActivePlayers,
-    g_iFwdUpdateClientData, HamHook:g_iFwdTouch, HamHook:g_iFwdPreThink, HamHook:g_iFwdKilled,
+    HamHook:g_iFwdTouch, HamHook:g_iFwdPreThink, HamHook:g_iFwdKilled,
     g_iThwomp, g_iThwompConfig, g_iScreenShake,
     g_iMaxPlayers
 
@@ -340,7 +342,6 @@ public plugin_init()
     register_concmd("thwomp_reload",  "cmdReload", ADMIN_ACCESS, "-- Reloads the configuration file")
     register_dictionary("Thwomp.txt")
 
-    g_iFwdUpdateClientData = register_forward(FM_UpdateClientData, "fwdUpdateClientData", 1)
     g_iFwdTouch = RegisterHam(Ham_Touch, "info_target", "fwdTouch")
     g_iFwdPreThink = RegisterHam(Ham_Player_PreThink, "player", "fwdPreThink")
     g_iFwdKilled = RegisterHam(Ham_Killed, "player", "fwdKilled", 1)
@@ -583,7 +584,7 @@ ReadFile()
                         else if ( equali(szKey, "SETTING_MAXS_LARGE") )
                             parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_MAXS_LARGE], charsmax(g_eSettings[SETTING_MAXS_LARGE]))
                         else if ( equali(szKey, "SETTING_THWOMP_LOAD") )
-                            parseSetting(DTYPE_BOOL, szValue, charsmax(szValue), g_eSettings[SETTING_THWOMP_LOAD], charsmax(g_eSettings[SETTING_THWOMP_LOAD]))
+                            parseSetting(DTYPE_INT, szValue, charsmax(szValue), g_eSettings[SETTING_THWOMP_LOAD], charsmax(g_eSettings[SETTING_THWOMP_LOAD]))
                         else if ( equali(szKey, "SETTING_THWOMP_CHECK") )
                             parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_THWOMP_CHECK], charsmax(g_eSettings[SETTING_THWOMP_CHECK]))
                         else if ( equali(szKey, "SETTING_THWOMP_TASK") )
@@ -703,7 +704,7 @@ stock thwompTerminate()
     for ( new i = 0; i < g_iThwomp; i ++ )
     {
         ArrayGetArray(g_aThwomp, i, eThwomp)
-        eThwomp[THWOMP_FLAGS] &= ~(FLAG_ANGRY | FLAG_IDLE | FLAG_RETREAT)
+        eThwomp[THWOMP_FLAGS] &= ~(FLAG_ANGRY | FLAG_IDLE | FLAG_RAISE)
         if ( !(eThwomp[THWOMP_FLAGS] & FLAG_PENDING) )
             continue
 
@@ -1351,6 +1352,7 @@ public menuHandlerRotate(id, menu, item)
         {
             thwompTrace(eThwomp, id)
             DisableAction(id)
+            set_pdata_float(id, PDATA_NEXT_ATTACK, 0.0, XO_CBASEPLAYER, XO_CBASEPLAYER)
             g_ePlayerData[id][PDATA_THWOMP_GHOST] = 0
 
             eThwomp[THWOMP_FLAGS] &= ~FLAG_GHOST
@@ -1370,6 +1372,7 @@ public menuHandlerRotate(id, menu, item)
             thwompKill(eThwomp)
             thwompRemove(iItem)
             DisableAction(id)
+            set_pdata_float(id, PDATA_NEXT_ATTACK, 0.0, XO_CBASEPLAYER, XO_CBASEPLAYER)
             g_ePlayerData[id][PDATA_THWOMP_GHOST] = 0
 
             thwompSound(id, SOUND_MENU_NAV)
@@ -1380,6 +1383,7 @@ public menuHandlerRotate(id, menu, item)
             thwompKill(eThwomp)
             thwompRemove(iItem)
             DisableAction(id)
+            set_pdata_float(id, PDATA_NEXT_ATTACK, 0.0, XO_CBASEPLAYER, XO_CBASEPLAYER)
             g_ePlayerData[id][PDATA_THWOMP_GHOST] = 0
         }
     }
@@ -1398,13 +1402,15 @@ public thwompTask()
         ArrayGetArray(g_aThwomp, i, eThwomp)
         bModified = false
 
-        if ( eThwomp[THWOMP_FLAGS] & FLAG_RETREAT )
+        if ( eThwomp[THWOMP_FLAGS] & FLAG_RAISE )
         {
-            new Float:fOrigin[3]
+            new Float:fOrigin[3], Float:fPush[3]
             pev(eThwomp[THWOMP_ID], pev_origin, fOrigin)
+            fPush[2] = random_float(eThwomp[THWOMP_RAISE_STRENGTH][0], eThwomp[THWOMP_RAISE_STRENGTH][1])
+            set_pev(eThwomp[THWOMP_ID], pev_velocity, fPush)
             if ( fOrigin[2] >= eThwomp[THWOMP_ORIGIN_START][2] - THWOMP_POINT_EPSILON )
             {
-                eThwomp[THWOMP_FLAGS] &= ~FLAG_RETREAT
+                eThwomp[THWOMP_FLAGS] &= ~FLAG_RAISE
                 set_pev(eThwomp[THWOMP_ID], pev_velocity, Float:{0.0, 0.0, 0.0})
 
                 bModified = true
@@ -1450,12 +1456,9 @@ public thwompTask()
                 {
                     if ( fCurrentTime >= eThwomp[THWOMP_NEXT_RETREAT] )
                     {
-                        new Float:fPush[3]
-                        fPush[2] = random_float(eThwomp[THWOMP_RAISE_STRENGTH][0], eThwomp[THWOMP_RAISE_STRENGTH][1])
                         eThwomp[THWOMP_FLAGS] &= ~(FLAG_IDLE | FLAG_ACTIVE)
-                        eThwomp[THWOMP_FLAGS] |= FLAG_RETREAT
+                        eThwomp[THWOMP_FLAGS] |= FLAG_RAISE
                         eThwomp[THWOMP_NEXT_ENABLE] = fCurrentTime + random_float(eThwomp[THWOMP_COOLDOWN][0], eThwomp[THWOMP_COOLDOWN][1])
-                        set_pev(eThwomp[THWOMP_ID], pev_velocity, fPush)
                         thwompSetSeq(eThwomp[THWOMP_ID], THWOMP_SEQ_SLEEP)
 
                         bModified = true
@@ -1763,17 +1766,6 @@ public thwompGodMode(id)
     thwompMenu(id, MENU_ROOT)
 }
 
-public fwdUpdateClientData(id, iSendWeapons, iHandle)
-{
-    if ( g_ePlayerData[id][PDATA_THWOMP_GHOST] )
-    {
-        set_cd(iHandle, CD_WeaponAnim, 0)
-        set_cd(iHandle, CD_flNextAttack, get_gametime() + 0.1)
-    }
-
-    return FMRES_IGNORED
-}
-
 public fwdTouch(iEnt, iOther)
 {
     if ( !is_user_alive(iOther) )
@@ -1791,9 +1783,15 @@ public fwdTouch(iEnt, iOther)
     || !(CsTeams:eThwomp[THWOMP_TEAM] & cs_get_user_team(iOther)) )
         return HAM_IGNORED
 
+    new Float:fThwompOrigin[3], Float:fOrigin[3]
+    pev(iThwomp, pev_origin, fThwompOrigin)
+    pev(iOther, pev_origin, fOrigin)
+    fThwompOrigin[2] += eThwomp[THWOMP_MINS][2]
+
     if ( iEnt == eThwomp[THWOMP_TRIGGER] )
     {
-        if ( !(eThwomp[THWOMP_FLAGS] & (FLAG_ANGRY | FLAG_IDLE)) )
+        if ( !(eThwomp[THWOMP_FLAGS] & (FLAG_ANGRY | FLAG_IDLE))
+        && fOrigin[2] < fThwompOrigin[2] )
         {
             new szSound[MAX_RESOURCE_PATH_LENGTH]
             ArrayGetString(eThwomp[THWOMP_SOUND_ALERT], random(ArraySize(eThwomp[THWOMP_SOUND_ALERT])), szSound, charsmax(szSound))
@@ -1806,11 +1804,6 @@ public fwdTouch(iEnt, iOther)
     }
     else if ( eThwomp[THWOMP_FLAGS] & FLAG_ANGRY )
     {
-        new Float:fThwompOrigin[3], Float:fOrigin[3]
-        pev(iThwomp, pev_origin, fThwompOrigin)
-        pev(iOther, pev_origin, fOrigin)
-        fThwompOrigin[2] += eThwomp[THWOMP_MINS][2]
-
         if ( fOrigin[2] < fThwompOrigin[2] )
             ExecuteHamB(Ham_TakeDamage, iOther, iThwomp, iThwomp, THWOMP_DEATH_PENALTY, DMG_ALWAYSGIB)
     }
@@ -1847,6 +1840,7 @@ public fwdPreThink(id)
                 }
             }
 
+            set_pdata_float(id, PDATA_NEXT_ATTACK, fCurrentTime + 0.1, XO_CBASEPLAYER, XO_CBASEPLAYER)
             iButton &= ~(IN_ATTACK | IN_ATTACK2)
             set_pev(id, pev_button, iButton)
 
@@ -2066,7 +2060,7 @@ stock thwompSetSeq(iEnt, iSequence)
 stock thwompSetSize(eThwomp[THWOMP])
 {
     thwompSelect(eThwomp, TARGET_CLEAR)
-    thwompSetSeq(eThwomp[THWOMP_ID], THWOMP_SEQ_ANGRY)
+    thwompSetSeq(eThwomp[THWOMP_ID], THWOMP_SEQ_SLEEP)
     engfunc(EngFunc_SetOrigin, eThwomp[THWOMP_ID], eThwomp[THWOMP_ORIGIN_START])
     set_pev(eThwomp[THWOMP_ID], pev_angles, eThwomp[THWOMP_ANGLES])
     set_pev(eThwomp[THWOMP_ID], pev_solid, eThwomp[THWOMP_FLAGS] & FLAG_SHOW ? SOLID_BBOX : SOLID_NOT)
@@ -2114,11 +2108,8 @@ stock thwompSetState(eThwomp[THWOMP])
 
             if ( eThwomp[THWOMP_FLAGS] & FLAG_ANGRY )
             {
-                new Float:fPush[3]
-                fPush[2] = random_float(eThwomp[THWOMP_RAISE_STRENGTH][0], eThwomp[THWOMP_RAISE_STRENGTH][1])
                 eThwomp[THWOMP_FLAGS] &= ~FLAG_ANGRY
-                eThwomp[THWOMP_FLAGS] |= FLAG_RETREAT
-                set_pev(eThwomp[THWOMP_ID], pev_velocity, fPush)
+                eThwomp[THWOMP_FLAGS] |= FLAG_RAISE
             }
         }
     }
@@ -2129,11 +2120,8 @@ stock thwompSetState(eThwomp[THWOMP])
         thwompSetSeq(eThwomp[THWOMP_ID], THWOMP_SEQ_SLEEP)
         if ( eThwomp[THWOMP_FLAGS] & FLAG_ANGRY )
         {
-            new Float:fPush[3]
-            fPush[2] = random_float(eThwomp[THWOMP_RAISE_STRENGTH][0], eThwomp[THWOMP_RAISE_STRENGTH][1])
             eThwomp[THWOMP_FLAGS] &= ~FLAG_ANGRY
-            eThwomp[THWOMP_FLAGS] |= FLAG_RETREAT
-            set_pev(eThwomp[THWOMP_ID], pev_velocity, fPush)
+            eThwomp[THWOMP_FLAGS] |= FLAG_RAISE
         }
     }
 }
@@ -2256,10 +2244,6 @@ stock parseSetting(iType, szValue[], iValueLen, any:aOutput[], iOutputLength)
                 trim(szTok)
             }
         }
-        case DTYPE_BOOL:
-        {
-            aOutput[0] = bool:str_to_num(szValue)
-        }
         case DTYPE_FLAGS:
         {
             aOutput[0] = read_flags(szValue)
@@ -2335,14 +2319,12 @@ stock DisableAction(id)
 
 stock EnableForward()
 {
-    g_iFwdUpdateClientData = register_forward(FM_UpdateClientData, "fwdUpdateClientData", 1)
     EnableHamForward(g_iFwdPreThink)
     EnableHamForward(g_iFwdKilled)
 }
 
 stock DisableForward()
 {
-    unregister_forward(FM_UpdateClientData, g_iFwdUpdateClientData, 1)
     DisableHamForward(g_iFwdPreThink)
     DisableHamForward(g_iFwdKilled)
 }
