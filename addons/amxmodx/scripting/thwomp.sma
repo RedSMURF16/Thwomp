@@ -90,20 +90,18 @@ enum
 
 enum
 {
-    FLAG_ACTIVE_DELAY       = (1 << 0),
-    FLAG_ACTIVE_DURATION    = (1 << 1),
-    FLAG_SHAKE              = (1 << 2),
+    FLAG_SHAKE              = (1 << 0),
 
-    FLAG_SHOW               = (1 << 3),
-    FLAG_GHOST              = (1 << 4),
-    FLAG_GROUND             = (1 << 5),
-    FLAG_ACTIVE             = (1 << 6),
-    FLAG_PENDING            = (1 << 7),
-    FLAG_ANGRY              = (1 << 8),
-    FLAG_IDLE               = (1 << 9),
-    FLAG_RAISE            = (1 << 10),
-    FLAG_SOUND_ALERT        = (1 << 11),
-    FLAG_SOUND_SMASH        = (1 << 12)
+    FLAG_SHOW               = (1 << 1),
+    FLAG_GHOST              = (1 << 2),
+    FLAG_GROUND             = (1 << 3),
+    FLAG_ACTIVE             = (1 << 4),
+    FLAG_PENDING            = (1 << 5),
+    FLAG_ANGRY              = (1 << 6),
+    FLAG_IDLE               = (1 << 7),
+    FLAG_RAISE              = (1 << 8),
+    FLAG_SOUND_ALERT        = (1 << 9),
+    FLAG_SOUND_SMASH        = (1 << 10)
 }
 
 enum
@@ -135,10 +133,6 @@ enum _:MAIN_SETTINGS
     Array:SETTING_DEFAULT_SOUND_SMASH,
     SETTING_DEFAULT_FLAGS,
     SETTING_DEFAULT_TEAM,
-    Float:SETTING_DEFAULT_SPAWN_CHANCE,
-    Float:SETTING_DEFAULT_ACTIVE_DELAY[2],
-    Float:SETTING_DEFAULT_ACTIVE_DURATION[2],
-    Float:SETTING_DEFAULT_ACTIVE_COOLDOWN[2],
     Float:SETTING_DEFAULT_FALL_STRENGTH[2],
     Float:SETTING_DEFAULT_FALL_FREQ[2],
     Float:SETTING_DEFAULT_IDLE_DURATION[2],
@@ -189,10 +183,6 @@ enum _:THWOMP
     Array:THWOMP_SOUND_ALERT,
     Array:THWOMP_SOUND_SMASH,
 
-    Float:THWOMP_SPAWN_CHANCE,
-    Float:THWOMP_ACTIVE_DELAY[2],
-    Float:THWOMP_ACTIVE_DURATION[2],
-    Float:THWOMP_ACTIVE_COOLDOWN[2],
     Float:THWOMP_FALL_STRENGTH[2],
     Float:THWOMP_FALL_FREQ[2],
     Float:THWOMP_IDLE_DURATION[2],
@@ -203,10 +193,9 @@ enum _:THWOMP
     THWOMP_SHAKE_FREQUENCY,
     THWOMP_SHAKE_DURATION,
 
-    Float:THWOMP_NEXT_ENABLE,
-    Float:THWOMP_NEXT_DISABLE,
-    Float:THWOMP_NEXT_PUSH,
-    Float:THWOMP_NEXT_RETREAT
+    Float:THWOMP_NEXT_COOLDOWN,
+    Float:THWOMP_NEXT_FALL,
+    Float:THWOMP_NEXT_RAISE
 }
 
 enum _:PLAYER_DATA
@@ -395,30 +384,7 @@ public cmdReload(id, iLevel, iCmd)
 
 public eventRoundStart()
 {
-    if ( !g_iThwomp )
-        return PLUGIN_HANDLED
-
-    new eThwomp[THWOMP]
-    for ( new i = 0; i < g_iThwomp; i ++ )
-    {
-        ArrayGetArray(g_aThwomp, i, eThwomp)
-        if ( (eThwomp[THWOMP_FLAGS] & (FLAG_SHOW | FLAG_ACTIVE)) != (FLAG_SHOW | FLAG_ACTIVE) )
-            continue
-
-        thwompReset(eThwomp)
-        thwompSetState(eThwomp)
-        if ( eThwomp[THWOMP_SPAWN_CHANCE] >= random_float(0.0, 1.0) )
-        {
-            eThwomp[THWOMP_FLAGS] |= (FLAG_SHOW | FLAG_ACTIVE)
-
-            thwompSetDelay(eThwomp)
-            thwompSetState(eThwomp)
-        }
-
-        ArraySetArray(g_aThwomp, i, eThwomp)
-    }
-
-    return PLUGIN_HANDLED
+    thwompReset()
 }
 
 ReadFile()
@@ -479,13 +445,6 @@ ReadFile()
                         copy(eThwomp[THWOMP_NAME], charsmax(eThwomp[THWOMP_NAME]), szData)
                         eThwomp[THWOMP_FLAGS]                   = g_eSettings[SETTING_DEFAULT_FLAGS]
                         eThwomp[THWOMP_TEAM]                    = g_eSettings[SETTING_DEFAULT_TEAM]
-                        eThwomp[THWOMP_SPAWN_CHANCE]            = g_eSettings[SETTING_DEFAULT_SPAWN_CHANCE]
-                        eThwomp[THWOMP_ACTIVE_DELAY][0]         = g_eSettings[SETTING_DEFAULT_ACTIVE_DELAY][0]
-                        eThwomp[THWOMP_ACTIVE_DELAY][1]         = g_eSettings[SETTING_DEFAULT_ACTIVE_DELAY][1]
-                        eThwomp[THWOMP_ACTIVE_DURATION][0]      = g_eSettings[SETTING_DEFAULT_ACTIVE_DURATION][0]
-                        eThwomp[THWOMP_ACTIVE_DURATION][1]      = g_eSettings[SETTING_DEFAULT_ACTIVE_DURATION][1]
-                        eThwomp[THWOMP_ACTIVE_COOLDOWN][0]      = g_eSettings[SETTING_DEFAULT_ACTIVE_COOLDOWN][0]
-                        eThwomp[THWOMP_ACTIVE_COOLDOWN][1]      = g_eSettings[SETTING_DEFAULT_ACTIVE_COOLDOWN][1]
                         eThwomp[THWOMP_FALL_STRENGTH][0]        = g_eSettings[SETTING_DEFAULT_FALL_STRENGTH][0]
                         eThwomp[THWOMP_FALL_STRENGTH][1]        = g_eSettings[SETTING_DEFAULT_FALL_STRENGTH][1]
                         eThwomp[THWOMP_FALL_FREQ][0]            = g_eSettings[SETTING_DEFAULT_FALL_FREQ][0]
@@ -539,14 +498,6 @@ ReadFile()
                             parseSetting(DTYPE_FLAGS, szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_FLAGS], charsmax(g_eSettings[SETTING_DEFAULT_FLAGS]))
                         else if ( equali(szKey, "SETTING_DEFAULT_TEAM") )
                             parseSetting(DTYPE_INT, szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_TEAM], charsmax(g_eSettings[SETTING_DEFAULT_TEAM]))
-                        else if ( equali(szKey, "SETTING_DEFAULT_SPAWN_CHANCE") )
-                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_SPAWN_CHANCE], charsmax(g_eSettings[SETTING_DEFAULT_SPAWN_CHANCE]))
-                        else if ( equali(szKey, "SETTING_DEFAULT_ACTIVE_DELAY") )
-                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_ACTIVE_DELAY], charsmax(g_eSettings[SETTING_DEFAULT_ACTIVE_DELAY]))
-                        else if ( equali(szKey, "SETTING_DEFAULT_ACTIVE_DURATION") )
-                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_ACTIVE_DURATION], charsmax(g_eSettings[SETTING_DEFAULT_ACTIVE_DURATION]))
-                        else if ( equali(szKey, "SETTING_DEFAULT_ACTIVE_COOLDOWN") )
-                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_ACTIVE_COOLDOWN], charsmax(g_eSettings[SETTING_DEFAULT_ACTIVE_COOLDOWN]))
                         else if ( equali(szKey, "SETTING_DEFAULT_FALL_STRENGTH") )
                             parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_DEFAULT_FALL_STRENGTH], charsmax(g_eSettings[SETTING_DEFAULT_FALL_STRENGTH]))
                         else if ( equali(szKey, "SETTING_DEFAULT_FALL_FREQ") )
@@ -626,14 +577,6 @@ ReadFile()
                             parseSetting(DTYPE_FLAGS, szValue, charsmax(szValue), eThwomp[THWOMP_FLAGS], charsmax(eThwomp[THWOMP_FLAGS]))
                         else if ( equali(szKey, "THWOMP_TEAM") )
                             parseSetting(DTYPE_INT, szValue, charsmax(szValue), eThwomp[THWOMP_TEAM], charsmax(eThwomp[THWOMP_TEAM]))
-                        else if ( equali(szKey, "THWOMP_SPAWN_CHANCE") )
-                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), eThwomp[THWOMP_SPAWN_CHANCE], charsmax(eThwomp[THWOMP_SPAWN_CHANCE]))
-                        else if ( equali(szKey, "THWOMP_ACTIVE_DELAY") )
-                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), eThwomp[THWOMP_ACTIVE_DELAY], charsmax(eThwomp[THWOMP_ACTIVE_DELAY]))
-                        else if ( equali(szKey, "THWOMP_ACTIVE_DURATION") )
-                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), eThwomp[THWOMP_ACTIVE_DURATION], charsmax(eThwomp[THWOMP_ACTIVE_DURATION]))
-                        else if ( equali(szKey, "THWOMP_ACTIVE_COOLDOWN") )
-                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), eThwomp[THWOMP_ACTIVE_COOLDOWN], charsmax(eThwomp[THWOMP_ACTIVE_COOLDOWN]))
                         else if ( equali(szKey, "THWOMP_FALL_STRENGTH") )
                             parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), eThwomp[THWOMP_FALL_STRENGTH], charsmax(eThwomp[THWOMP_FALL_STRENGTH]))
                         else if ( equali(szKey, "THWOMP_FALL_FREQ") )
@@ -706,7 +649,10 @@ stock thwompTerminate()
         ArrayGetArray(g_aThwomp, i, eThwomp)
         eThwomp[THWOMP_FLAGS] &= ~(FLAG_ANGRY | FLAG_IDLE | FLAG_RAISE)
         if ( !(eThwomp[THWOMP_FLAGS] & FLAG_PENDING) )
+        {
+            ArraySetArray(g_aThwomp, i, eThwomp)
             continue
+        }
 
         eThwomp[THWOMP_FLAGS] |= FLAG_ACTIVE
         eThwomp[THWOMP_FLAGS] &= ~FLAG_PENDING
@@ -1359,7 +1305,6 @@ public menuHandlerRotate(id, menu, item)
             eThwomp[THWOMP_FLAGS] |= (FLAG_SHOW | FLAG_ACTIVE)
             eThwomp[THWOMP_ANGLES][0] = -eThwomp[THWOMP_ANGLES][0]
             thwompSetSize(eThwomp)
-            thwompSetDelay(eThwomp)
             thwompSetState(eThwomp)
             client_print_color(id, id, "%L %L", id, "THWOMP_CHAT_TAG", id, "THWOMP_CHAT_CREATE_NEW", eThwomp[THWOMP_NAME])
 
@@ -1402,7 +1347,8 @@ public thwompTask()
         ArrayGetArray(g_aThwomp, i, eThwomp)
         bModified = false
 
-        if ( eThwomp[THWOMP_FLAGS] & FLAG_RAISE )
+        if ( !(eThwomp[THWOMP_FLAGS] & FLAG_ANGRY)
+        && eThwomp[THWOMP_FLAGS] & FLAG_RAISE )
         {
             new Float:fOrigin[3], Float:fPush[3]
             pev(eThwomp[THWOMP_ID], pev_origin, fOrigin)
@@ -1417,78 +1363,48 @@ public thwompTask()
             }
         }
 
-        if ( eThwomp[THWOMP_FLAGS] & FLAG_SHOW )
+        if ( (eThwomp[THWOMP_FLAGS] & (FLAG_SHOW | FLAG_ACTIVE)) == (FLAG_SHOW | FLAG_ACTIVE) )
         {
-            if ( eThwomp[THWOMP_FLAGS] & FLAG_ACTIVE )
+            if ( eThwomp[THWOMP_FLAGS] & FLAG_ANGRY )
             {
-                if ( eThwomp[THWOMP_FLAGS] & FLAG_ANGRY )
+                new Float:fOrigin[3]
+                pev(eThwomp[THWOMP_ID], pev_origin, fOrigin)
+                if ( fCurrentTime >= eThwomp[THWOMP_NEXT_FALL] )
                 {
-                    new Float:fOrigin[3]
-                    pev(eThwomp[THWOMP_ID], pev_origin, fOrigin)
-                    if ( fCurrentTime >= eThwomp[THWOMP_NEXT_PUSH] )
-                    {
-                        new Float:fVelocity[3]
-                        pev(eThwomp[THWOMP_ID], pev_velocity, fVelocity)
-                        fVelocity[2] -= random_float(eThwomp[THWOMP_FALL_STRENGTH][0], eThwomp[THWOMP_FALL_STRENGTH][1])
-                        set_pev(eThwomp[THWOMP_ID], pev_velocity, fVelocity)
-                        eThwomp[THWOMP_NEXT_PUSH] = fCurrentTime + random_float(eThwomp[THWOMP_FALL_FREQ][0], eThwomp[THWOMP_FALL_FREQ][1])
+                    new Float:fVelocity[3]
+                    pev(eThwomp[THWOMP_ID], pev_velocity, fVelocity)
+                    fVelocity[2] -= random_float(eThwomp[THWOMP_FALL_STRENGTH][0], eThwomp[THWOMP_FALL_STRENGTH][1])
+                    set_pev(eThwomp[THWOMP_ID], pev_velocity, fVelocity)
+                    eThwomp[THWOMP_NEXT_FALL] = fCurrentTime + random_float(eThwomp[THWOMP_FALL_FREQ][0], eThwomp[THWOMP_FALL_FREQ][1])
 
-                        bModified = true
-                    }
-
-                    if ( fOrigin[2] <= eThwomp[THWOMP_ORIGIN_END][2] + THWOMP_POINT_EPSILON )
-                    {
-                        new szSound[MAX_RESOURCE_PATH_LENGTH]
-                        ArrayGetString(eThwomp[THWOMP_SOUND_SMASH], random(ArraySize(eThwomp[THWOMP_SOUND_SMASH])), szSound, charsmax(szSound))
-                        engfunc(EngFunc_EmitSound, eThwomp[THWOMP_ID], CHAN_ITEM, szSound, VOL_NORM, ATTN_NORM, 0, PITCH_NORM)
-
-                        eThwomp[THWOMP_FLAGS] &= ~FLAG_ANGRY
-                        eThwomp[THWOMP_FLAGS] |= FLAG_IDLE
-                        eThwomp[THWOMP_NEXT_RETREAT] = fCurrentTime + random_float(eThwomp[THWOMP_IDLE_DURATION][0], eThwomp[THWOMP_IDLE_DURATION][1])
-                        set_pev(eThwomp[THWOMP_ID], pev_velocity, Float:{0.0, 0.0, 0.0})
-                        if ( eThwomp[THWOMP_FLAGS] & FLAG_SHAKE )
-                            thwompShake(eThwomp)
-
-                        bModified = true
-                    }
-                }
-                else if ( eThwomp[THWOMP_FLAGS] & FLAG_IDLE )
-                {
-                    if ( fCurrentTime >= eThwomp[THWOMP_NEXT_RETREAT] )
-                    {
-                        eThwomp[THWOMP_FLAGS] &= ~(FLAG_IDLE | FLAG_ACTIVE)
-                        eThwomp[THWOMP_FLAGS] |= FLAG_RAISE
-                        eThwomp[THWOMP_NEXT_ENABLE] = fCurrentTime + random_float(eThwomp[THWOMP_COOLDOWN][0], eThwomp[THWOMP_COOLDOWN][1])
-                        thwompSetSeq(eThwomp[THWOMP_ID], THWOMP_SEQ_SLEEP)
-
-                        bModified = true
-                    }
+                    bModified = true
                 }
 
-                if ( eThwomp[THWOMP_NEXT_DISABLE] > 0.0
-                && fCurrentTime >= eThwomp[THWOMP_NEXT_DISABLE] )
+                if ( fOrigin[2] <= eThwomp[THWOMP_ORIGIN_END][2] + THWOMP_POINT_EPSILON )
                 {
-                    eThwomp[THWOMP_FLAGS] &= ~FLAG_ACTIVE
-                    eThwomp[THWOMP_FLAGS] |= FLAG_PENDING
-                    eThwomp[THWOMP_NEXT_DISABLE] = 0.0
-                    eThwomp[THWOMP_NEXT_ENABLE] = fCurrentTime + random_float(eThwomp[THWOMP_ACTIVE_COOLDOWN][0], eThwomp[THWOMP_ACTIVE_COOLDOWN][1])
+                    new szSound[MAX_RESOURCE_PATH_LENGTH]
+                    ArrayGetString(eThwomp[THWOMP_SOUND_SMASH], random(ArraySize(eThwomp[THWOMP_SOUND_SMASH])), szSound, charsmax(szSound))
+                    engfunc(EngFunc_EmitSound, eThwomp[THWOMP_ID], CHAN_ITEM, szSound, VOL_NORM, ATTN_NORM, 0, PITCH_NORM)
 
-                    thwompSetState(eThwomp)
+                    eThwomp[THWOMP_FLAGS] &= ~FLAG_ANGRY
+                    eThwomp[THWOMP_FLAGS] |= FLAG_IDLE
+                    eThwomp[THWOMP_NEXT_RAISE] = fCurrentTime + random_float(eThwomp[THWOMP_IDLE_DURATION][0], eThwomp[THWOMP_IDLE_DURATION][1])
+                    set_pev(eThwomp[THWOMP_ID], pev_velocity, Float:{0.0, 0.0, 0.0})
+                    if ( eThwomp[THWOMP_FLAGS] & FLAG_SHAKE )
+                        thwompShake(eThwomp)
+
                     bModified = true
                 }
             }
-            else
+            else if ( eThwomp[THWOMP_FLAGS] & FLAG_IDLE )
             {
-                if ( eThwomp[THWOMP_NEXT_ENABLE] > 0.0
-                && fCurrentTime >= eThwomp[THWOMP_NEXT_ENABLE] )
+                if ( fCurrentTime >= eThwomp[THWOMP_NEXT_RAISE] )
                 {
-                    eThwomp[THWOMP_FLAGS] |= FLAG_ACTIVE
-                    eThwomp[THWOMP_FLAGS] &= ~FLAG_PENDING
-                    eThwomp[THWOMP_NEXT_ENABLE] = 0.0
-                    if ( eThwomp[THWOMP_FLAGS] & FLAG_ACTIVE_DURATION )
-                        eThwomp[THWOMP_NEXT_DISABLE] = fCurrentTime + random_float(eThwomp[THWOMP_ACTIVE_DURATION][0], eThwomp[THWOMP_ACTIVE_DURATION][1])
+                    eThwomp[THWOMP_FLAGS] &= ~FLAG_IDLE
+                    eThwomp[THWOMP_FLAGS] |= FLAG_RAISE
+                    eThwomp[THWOMP_NEXT_COOLDOWN] = fCurrentTime + random_float(eThwomp[THWOMP_COOLDOWN][0], eThwomp[THWOMP_COOLDOWN][1])
+                    thwompSetSeq(eThwomp[THWOMP_ID], THWOMP_SEQ_SLEEP)
 
-                    thwompSetState(eThwomp)
                     bModified = true
                 }
             }
@@ -1575,16 +1491,6 @@ stock thwompCreateTrigger(eThwomp[THWOMP])
     set_pev(iTrigger, pev_solid, SOLID_TRIGGER)
     set_pev(iTrigger, pev_movetype, MOVETYPE_NONE)
     engfunc(EngFunc_SetSize, iTrigger, fMins, fMaxs)
-}
-
-stock thwompSparks(Float:fOrigin[3])
-{
-    message_begin_f(MSG_PVS, SVC_TEMPENTITY, fOrigin)
-    write_byte(TE_SPARKS)
-    write_coord_f(fOrigin[0])
-    write_coord_f(fOrigin[1])
-    write_coord_f(fOrigin[2])
-    message_end()
 }
 
 public thwompRemove(iItem)
@@ -1744,7 +1650,6 @@ stock LoadDataThwomp(iItem, iFlags, iSize, Float:fOrigin[3], Float:fAngles[3], i
 
     thwompSetBox(eThwomp)
     thwompSetSize(eThwomp)
-    thwompSetDelay(eThwomp)
     thwompSetState(eThwomp)
     thwompSetSeq(eThwomp[THWOMP_ID], THWOMP_SEQ_SLEEP)
     ArraySetArray(g_aThwomp, iCount, eThwomp)
@@ -1790,7 +1695,8 @@ public fwdTouch(iEnt, iOther)
 
     if ( iEnt == eThwomp[THWOMP_TRIGGER] )
     {
-        if ( !(eThwomp[THWOMP_FLAGS] & (FLAG_ANGRY | FLAG_IDLE))
+        if ( !(eThwomp[THWOMP_FLAGS] & (FLAG_ANGRY | FLAG_IDLE | FLAG_RAISE))
+        && get_gametime() >= eThwomp[THWOMP_NEXT_COOLDOWN]
         && fOrigin[2] < fThwompOrigin[2] )
         {
             new szSound[MAX_RESOURCE_PATH_LENGTH]
@@ -2073,28 +1979,6 @@ stock thwompSetSize(eThwomp[THWOMP])
     thwompCreateTrigger(eThwomp)
 }
 
-stock thwompSetDelay(eThwomp[THWOMP])
-{
-    if ( eThwomp[THWOMP_FLAGS] & FLAG_ACTIVE )
-    {
-        new Float:fCurrentTime
-        fCurrentTime = get_gametime()
-
-        if ( eThwomp[THWOMP_FLAGS] & FLAG_ACTIVE_DELAY )
-        {
-            eThwomp[THWOMP_FLAGS] &= ~FLAG_ACTIVE
-            eThwomp[THWOMP_NEXT_ENABLE] = fCurrentTime + random_float(eThwomp[THWOMP_ACTIVE_DELAY][0], eThwomp[THWOMP_ACTIVE_DELAY][1])
-
-            thwompSetState(eThwomp)
-        }
-        else
-        {
-            if ( eThwomp[THWOMP_FLAGS] & FLAG_ACTIVE_DURATION )
-                eThwomp[THWOMP_NEXT_DISABLE] = fCurrentTime + random_float(eThwomp[THWOMP_ACTIVE_DURATION][0], eThwomp[THWOMP_ACTIVE_DURATION][1])
-        }
-    }
-}
-
 stock thwompSetState(eThwomp[THWOMP])
 {
     if ( eThwomp[THWOMP_FLAGS] & FLAG_SHOW )
@@ -2175,14 +2059,17 @@ stock thwompSound(iEnt, iSound, bool:bPlayer = true)
         engfunc(EngFunc_EmitSound, iEnt, CHAN_ITEM, szSample, VOL_NORM, ATTN_NORM, 0, PITCH_NORM)
 }
 
-stock thwompReset(eThwomp[THWOMP])
+stock thwompReset()
 {
-    eThwomp[THWOMP_FLAGS] &= ~(FLAG_SHOW | FLAG_ACTIVE)
-    eThwomp[THWOMP_NEXT_ENABLE] = 0.0
-    eThwomp[THWOMP_NEXT_DISABLE] = 0.0
-    eThwomp[THWOMP_NEXT_PUSH] = 0.0
-
-    thwompSetState(eThwomp)
+    new eThwomp[THWOMP]
+    for ( new i = 0; i < g_iThwomp; i ++ )
+    {
+        ArrayGetArray(g_aThwomp, i, eThwomp)
+        eThwomp[THWOMP_NEXT_COOLDOWN] = 0.0
+        eThwomp[THWOMP_NEXT_FALL] = 0.0
+        eThwomp[THWOMP_NEXT_RAISE] = 0.0
+        ArraySetArray(g_aThwomp, i, eThwomp)
+    }
 }
 
 stock thwompGet(eThwomp[THWOMP], iEnt)
