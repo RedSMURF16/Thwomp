@@ -2074,6 +2074,9 @@ stock thwompReset()
 
 stock thwompGet(eThwomp[THWOMP], iEnt)
 {
+    if ( !isThwomp(iEnt) )
+        return -1
+
     new iItem
     iItem = pev(iEnt, THWOMP_ARRAY_ITEM)
     if ( iItem < 0 || iItem >= g_iThwomp )
