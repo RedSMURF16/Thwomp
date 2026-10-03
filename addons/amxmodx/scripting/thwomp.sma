@@ -1548,10 +1548,6 @@ public saveData(id)
         formatex(szData, charsmax(szData), "angles = %.2f %.2f %.2f^n",
         eThwomp[THWOMP_ANGLES][0], eThwomp[THWOMP_ANGLES][1], eThwomp[THWOMP_ANGLES][2])
         fputs(iFile, szData)
-
-        formatex(szData, charsmax(szData), "direction = %.2f %.2f %.2f^n",
-        eThwomp[THWOMP_DIRECTION][0], eThwomp[THWOMP_DIRECTION][1], eThwomp[THWOMP_DIRECTION][2])
-        fputs(iFile, szData)
     }
 
     client_print_color(id, id, "%L %L", id, "THWOMP_CHAT_TAG", id, "THWOMP_CHAT_SAVE", szFile)
@@ -1752,10 +1748,10 @@ public fwdPreThink(id)
 
             thwompTrace(eThwomp, id)
         }
-        else if ( g_ePlayerData[id][PDATA_THWOMP_ACTION] )
-        {
-            thwompCheck(id)
-        }
+    }
+    else if ( g_ePlayerData[id][PDATA_THWOMP_ACTION] )
+    {
+        thwompCheck(id)
     }
 
     return HAM_IGNORED
