@@ -312,7 +312,7 @@ new Array:g_aThwomp,
     g_eSettings[MAIN_SETTINGS],
     g_ePlayerData[MAX_PLAYERS + 1][PLAYER_DATA],
     bool:g_bFileWasRead, g_iActivePlayers,
-    HamHook:g_iFwdTouch, HamHook:g_iFwdPreThink, HamHook:g_iFwdKilled,
+    g_iFwdStartFrame, HamHook:g_iFwdTouch, HamHook:g_iFwdPreThink, HamHook:g_iFwdKilled,
     g_iThwomp, g_iThwompConfig, g_iScreenShake,
     g_iMaxPlayers
 
@@ -330,6 +330,7 @@ public plugin_init()
     register_concmd("thwomp_reload",  "cmdReload", ADMIN_ACCESS, "-- Reloads the configuration file")
     register_dictionary("Thwomp.txt")
 
+    g_iFwdStartFrame = register_forward(FM_StartFrame, "fwdStartFrame")
     g_iFwdTouch = RegisterHam(Ham_Touch, "info_target", "fwdTouch")
     g_iFwdPreThink = RegisterHam(Ham_Player_PreThink, "player", "fwdPreThink")
     g_iFwdKilled = RegisterHam(Ham_Killed, "player", "fwdKilled", 1)
@@ -1025,6 +1026,8 @@ public menuHandlerShow(id, menu, item)
         case SHOW_CURRENT:
         {
             eThwomp[THWOMP_FLAGS] ^= FLAG_SHOW
+            if ( !(eThwomp[THWOMP_FLAGS] & FLAG_SHOW) )
+                eThwomp[THWOMP_FLAGS] &= ~FLAG_ACTIVE
             thwompSetState(eThwomp)
 
             client_print_color(id, id, "%L %L", id, "THWOMP_CHAT_TAG", id, "THWOMP_CHAT_SHOW_CURRENT",
@@ -1055,6 +1058,7 @@ public menuHandlerShow(id, menu, item)
             {
                 ArrayGetArray(g_aThwomp, i, eThwomp)
                 eThwomp[THWOMP_FLAGS] &= ~FLAG_SHOW
+                eThwomp[THWOMP_FLAGS] &= ~FLAG_ACTIVE
                 thwompSetState(eThwomp)
 
                 ArraySetArray(g_aThwomp, i, eThwomp)
@@ -1349,20 +1353,12 @@ public thwompTask()
         if ( !(eThwomp[THWOMP_FLAGS] & FLAG_ANGRY)
         && eThwomp[THWOMP_FLAGS] & FLAG_RAISE )
         {
-            new Float:fOrigin[3], Float:fPush[3]
-            pev(eThwomp[THWOMP_ID], pev_origin, fOrigin)
+            new Float:fPush[3]
             fPush[2] = random_float(eThwomp[THWOMP_RAISE_STRENGTH][0], eThwomp[THWOMP_RAISE_STRENGTH][1])
             set_pev(eThwomp[THWOMP_ID], pev_velocity, fPush)
-            if ( fOrigin[2] >= eThwomp[THWOMP_ORIGIN_START][2] - THWOMP_POINT_EPSILON )
-            {
-                eThwomp[THWOMP_FLAGS] &= ~FLAG_RAISE
-                set_pev(eThwomp[THWOMP_ID], pev_velocity, Float:{0.0, 0.0, 0.0})
-
-                bModified = true
-            }
         }
 
-        if ( (eThwomp[THWOMP_FLAGS] & (FLAG_SHOW | FLAG_ACTIVE)) == (FLAG_SHOW | FLAG_ACTIVE) )
+        if ( eThwomp[THWOMP_FLAGS] & FLAG_ACTIVE )
         {
             if ( eThwomp[THWOMP_FLAGS] & FLAG_ANGRY )
             {
@@ -1375,22 +1371,6 @@ public thwompTask()
                     fVelocity[2] -= random_float(eThwomp[THWOMP_FALL_STRENGTH][0], eThwomp[THWOMP_FALL_STRENGTH][1])
                     set_pev(eThwomp[THWOMP_ID], pev_velocity, fVelocity)
                     eThwomp[THWOMP_NEXT_FALL] = fCurrentTime + random_float(eThwomp[THWOMP_FALL_FREQ][0], eThwomp[THWOMP_FALL_FREQ][1])
-
-                    bModified = true
-                }
-
-                if ( fOrigin[2] <= eThwomp[THWOMP_ORIGIN_END][2] + THWOMP_POINT_EPSILON )
-                {
-                    new szSound[MAX_RESOURCE_PATH_LENGTH]
-                    ArrayGetString(eThwomp[THWOMP_SOUND_SMASH], random(ArraySize(eThwomp[THWOMP_SOUND_SMASH])), szSound, charsmax(szSound))
-                    engfunc(EngFunc_EmitSound, eThwomp[THWOMP_ID], CHAN_ITEM, szSound, VOL_NORM, ATTN_NORM, 0, PITCH_NORM)
-
-                    eThwomp[THWOMP_FLAGS] &= ~FLAG_ANGRY
-                    eThwomp[THWOMP_FLAGS] |= FLAG_IDLE
-                    eThwomp[THWOMP_NEXT_RAISE] = fCurrentTime + random_float(eThwomp[THWOMP_IDLE_DURATION][0], eThwomp[THWOMP_IDLE_DURATION][1])
-                    set_pev(eThwomp[THWOMP_ID], pev_velocity, Float:{0.0, 0.0, 0.0})
-                    if ( eThwomp[THWOMP_FLAGS] & FLAG_SHAKE )
-                        thwompShake(eThwomp)
 
                     bModified = true
                 }
@@ -1664,6 +1644,54 @@ public thwompGodMode(id)
 
     thwompSound(id, SOUND_MENU_NAV)
     thwompMenu(id, MENU_ROOT)
+}
+
+public fwdStartFrame()
+{
+    new eThwomp[THWOMP], bool:bModified
+    for ( new i = 0; i < g_iThwomp; i ++ )
+    {
+        ArrayGetArray(g_aThwomp, i, eThwomp)
+        if ( !(eThwomp[THWOMP_FLAGS] & (FLAG_ANGRY | FLAG_RAISE)) )
+            continue
+
+        if ( !(eThwomp[THWOMP_FLAGS] & FLAG_ANGRY) )
+        {
+            new Float:fOrigin[3]
+            pev(eThwomp[THWOMP_ID], pev_origin, fOrigin)
+            if ( fOrigin[2] >= eThwomp[THWOMP_ORIGIN_START][2] - THWOMP_POINT_EPSILON )
+            {
+                eThwomp[THWOMP_FLAGS] &= ~FLAG_RAISE
+                set_pev(eThwomp[THWOMP_ID], pev_velocity, Float:{0.0, 0.0, 0.0})
+
+                bModified = true
+            }
+        }
+        else if ( eThwomp[THWOMP_FLAGS] & FLAG_ACTIVE )
+        {
+            new Float:fOrigin[3]
+            pev(eThwomp[THWOMP_ID], pev_origin, fOrigin)
+            if ( fOrigin[2] <= eThwomp[THWOMP_ORIGIN_END][2] + THWOMP_POINT_EPSILON )
+            {
+                new szSound[MAX_RESOURCE_PATH_LENGTH]
+                ArrayGetString(eThwomp[THWOMP_SOUND_SMASH], random(ArraySize(eThwomp[THWOMP_SOUND_SMASH])), szSound, charsmax(szSound))
+                engfunc(EngFunc_EmitSound, eThwomp[THWOMP_ID], CHAN_ITEM, szSound, VOL_NORM, ATTN_NORM, 0, PITCH_NORM)
+
+                eThwomp[THWOMP_FLAGS] &= ~FLAG_ANGRY
+                eThwomp[THWOMP_FLAGS] |= FLAG_IDLE
+                eThwomp[THWOMP_NEXT_RAISE] = get_gametime() + random_float(eThwomp[THWOMP_IDLE_DURATION][0], eThwomp[THWOMP_IDLE_DURATION][1])
+                set_pev(eThwomp[THWOMP_ID], pev_velocity, Float:{0.0, 0.0, 0.0})
+
+                if ( eThwomp[THWOMP_FLAGS] & FLAG_SHAKE )
+                    thwompShake(eThwomp)
+
+                bModified = true
+            }
+        }
+
+        if ( bModified )
+            ArraySetArray(g_aThwomp, i, eThwomp)
+    }
 }
 
 public fwdTouch(iEnt, iOther)
@@ -2202,12 +2230,14 @@ stock DisableAction(id)
 
 stock EnableForward()
 {
+    g_iFwdStartFrame = register_forward(FM_StartFrame, "fwdStartFrame")
     EnableHamForward(g_iFwdPreThink)
     EnableHamForward(g_iFwdKilled)
 }
 
 stock DisableForward()
 {
+    unregister_forward(FM_StartFrame, g_iFwdStartFrame)
     DisableHamForward(g_iFwdPreThink)
     DisableHamForward(g_iFwdKilled)
 }
