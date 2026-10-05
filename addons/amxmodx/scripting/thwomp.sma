@@ -179,7 +179,6 @@ enum _:THWOMP
     Float:THWOMP_ANGLES[3],
     Float:THWOMP_MINS[3],
     Float:THWOMP_MAXS[3],
-    Float:THWOMP_DIRECTION[3],
     Array:THWOMP_SOUND_ALERT,
     Array:THWOMP_SOUND_SMASH,
 
@@ -1909,9 +1908,9 @@ stock thwompSetBox(eThwomp[THWOMP])
 stock boxRotate(Float:fLocal[3], Float:fForward[3], Float:fRight[3], Float:fUp[3])
 {
     new Float:fOut[3]
-    fOut[0] = fLocal[0] * fForward[0] + fLocal[1] * fRight[0] + fLocal[2] * fUp[0]
-    fOut[1] = fLocal[0] * fForward[1] + fLocal[1] * fRight[1] + fLocal[2] * fUp[1]
-    fOut[2] = fLocal[0] * fForward[2] + fLocal[1] * fRight[2] + fLocal[2] * fUp[2]
+    fOut[0] = fLocal[0] * fForward[0] - fLocal[1] * fRight[0] + fLocal[2] * fUp[0]
+    fOut[1] = fLocal[0] * fForward[1] - fLocal[1] * fRight[1] + fLocal[2] * fUp[1]
+    fOut[2] = fLocal[0] * fForward[2] - fLocal[1] * fRight[2] + fLocal[2] * fUp[2]
 
     xs_vec_copy(fOut, fLocal)
 }
@@ -1970,8 +1969,6 @@ stock thwompSetSize(eThwomp[THWOMP])
 
     eThwomp[THWOMP_ANGLES][0] = -eThwomp[THWOMP_ANGLES][0]
     engfunc(EngFunc_SetSize, eThwomp[THWOMP_ID], eThwomp[THWOMP_MINS], eThwomp[THWOMP_MAXS])
-    engfunc(EngFunc_AngleVectors, eThwomp[THWOMP_ANGLES], NULL_VECTOR, NULL_VECTOR, eThwomp[THWOMP_DIRECTION])
-    xs_vec_mul_scalar(eThwomp[THWOMP_DIRECTION], -1.0, eThwomp[THWOMP_DIRECTION])
     thwompCreateTrigger(eThwomp)
 }
 
