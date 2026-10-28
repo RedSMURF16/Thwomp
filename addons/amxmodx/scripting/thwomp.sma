@@ -48,6 +48,13 @@
 #endif
 
 #define MAX_ENT                     32
+#define THWOMP_CHECK                10.0
+#define THWOMP_OFFSET_BASE          120.0
+#define THWOMP_OFFSET_MIN           65.0
+#define THWOMP_OFFSET_MAX           900.0
+#define THWOMP_OFFSET_STEP          10.0
+#define THWOMP_GHOST_ALPHA          120
+#define THWOMP_ROTATION_STEP        22.5
 #define ADMIN_ACCESS                ADMIN_RCON
 #define PDATA_NEXT_ATTACK           83
 #define XO_CBASEPLAYER              5
@@ -98,9 +105,7 @@ enum
     FLAG_PENDING            = (1 << 5),
     FLAG_ANGRY              = (1 << 6),
     FLAG_IDLE               = (1 << 7),
-    FLAG_RAISE              = (1 << 8),
-    FLAG_SOUND_ALERT        = (1 << 9),
-    FLAG_SOUND_SMASH        = (1 << 10)
+    FLAG_RAISE              = (1 << 8)
 }
 
 enum
@@ -153,13 +158,7 @@ enum _:MAIN_SETTINGS
     Float:SETTING_MAXS_LARGE[3],
 
     bool:SETTING_THWOMP_LOAD,
-    Float:SETTING_THWOMP_CHECK,
     Float:SETTING_THWOMP_TASK,
-    Float:SETTING_OFFSET_BASE,
-    Float:SETTING_OFFSET[2],
-    Float:SETTING_OFFSET_STEP,
-    SETTING_GHOST_ALPHA,
-    Float:SETTING_ROTATION_STEP
 }
 
 enum _:THWOMP
@@ -178,8 +177,6 @@ enum _:THWOMP
     Float:THWOMP_ANGLES[3],
     Float:THWOMP_MINS[3],
     Float:THWOMP_MAXS[3],
-    Array:THWOMP_SOUND_ALERT,
-    Array:THWOMP_SOUND_SMASH,
 
     Float:THWOMP_FALL_STRENGTH[2],
     Float:THWOMP_FALL_FREQ[2],
@@ -454,8 +451,6 @@ ReadFile()
                         eThwomp[THWOMP_SHAKE_AMPLITUDE]         = g_eSettings[SETTING_DEFAULT_SHAKE_AMPLITUDE]
                         eThwomp[THWOMP_SHAKE_FREQUENCY]         = g_eSettings[SETTING_DEFAULT_SHAKE_FREQUENCY]
                         eThwomp[THWOMP_SHAKE_DURATION]          = g_eSettings[SETTING_DEFAULT_SHAKE_DURATION]
-                        eThwomp[THWOMP_SOUND_ALERT]             = ArrayClone(g_eSettings[SETTING_DEFAULT_SOUND_ALERT])
-                        eThwomp[THWOMP_SOUND_SMASH]             = ArrayClone(g_eSettings[SETTING_DEFAULT_SOUND_SMASH])
 
                         iSection = SECTION_THWOMP
                         g_iThwompConfig ++
@@ -531,44 +526,12 @@ ReadFile()
                             parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_MAXS_LARGE], charsmax(g_eSettings[SETTING_MAXS_LARGE]))
                         else if ( equali(szKey, "SETTING_THWOMP_LOAD") )
                             parseSetting(DTYPE_INT, szValue, charsmax(szValue), g_eSettings[SETTING_THWOMP_LOAD], charsmax(g_eSettings[SETTING_THWOMP_LOAD]))
-                        else if ( equali(szKey, "SETTING_THWOMP_CHECK") )
-                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_THWOMP_CHECK], charsmax(g_eSettings[SETTING_THWOMP_CHECK]))
                         else if ( equali(szKey, "SETTING_THWOMP_TASK") )
                             parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_THWOMP_TASK], charsmax(g_eSettings[SETTING_THWOMP_TASK]))
-                        else if ( equali(szKey, "SETTING_OFFSET_BASE") )
-                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_OFFSET_BASE], charsmax(g_eSettings[SETTING_OFFSET_BASE]))
-                        else if ( equali(szKey, "SETTING_OFFSET") )
-                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_OFFSET], charsmax(g_eSettings[SETTING_OFFSET]))
-                        else if ( equali(szKey, "SETTING_OFFSET_STEP") )
-                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_OFFSET_STEP], charsmax(g_eSettings[SETTING_OFFSET_STEP]))
-                        else if ( equali(szKey, "SETTING_GHOST_ALPHA") )
-                            parseSetting(DTYPE_INT, szValue, charsmax(szValue), g_eSettings[SETTING_GHOST_ALPHA], charsmax(g_eSettings[SETTING_GHOST_ALPHA]))
-                        else if ( equali(szKey, "SETTING_ROTATION_STEP") )
-                            parseSetting(DTYPE_FLOAT, szValue, charsmax(szValue), g_eSettings[SETTING_ROTATION_STEP], charsmax(g_eSettings[SETTING_ROTATION_STEP]))
                     }
                     case SECTION_THWOMP:
                     {
-                        if ( equali(szKey, "THWOMP_SOUND_ALERT") )
-                        {
-                            if ( !(eThwomp[THWOMP_FLAGS] & FLAG_SOUND_ALERT) )
-                            {
-                                ArrayClear(eThwomp[THWOMP_SOUND_ALERT])
-                                eThwomp[THWOMP_FLAGS] |= FLAG_SOUND_ALERT
-                            }
-
-                            parseSetting(DTYPE_ARRAY_SOUND, szValue, charsmax(szValue), eThwomp[THWOMP_SOUND_ALERT], charsmax(eThwomp[THWOMP_SOUND_ALERT]))
-                        }
-                        else if ( equali(szKey, "THWOMP_SOUND_SMASH") )
-                        {
-                            if ( !(eThwomp[THWOMP_FLAGS] & FLAG_SOUND_SMASH) )
-                            {
-                                ArrayClear(eThwomp[THWOMP_SOUND_SMASH])
-                                eThwomp[THWOMP_FLAGS] |= FLAG_SOUND_SMASH
-                            }
-
-                            parseSetting(DTYPE_ARRAY_SOUND, szValue, charsmax(szValue), eThwomp[THWOMP_SOUND_SMASH], charsmax(eThwomp[THWOMP_SOUND_SMASH]))
-                        }
-                        else if ( equali(szKey, "THWOMP_FLAGS") )
+                        if ( equali(szKey, "THWOMP_FLAGS") )
                             parseSetting(DTYPE_FLAGS, szValue, charsmax(szValue), eThwomp[THWOMP_FLAGS], charsmax(eThwomp[THWOMP_FLAGS]))
                         else if ( equali(szKey, "THWOMP_TEAM") )
                             parseSetting(DTYPE_INT, szValue, charsmax(szValue), eThwomp[THWOMP_TEAM], charsmax(eThwomp[THWOMP_TEAM]))
@@ -1236,7 +1199,7 @@ public menuHandlerRotate(id, menu, item)
         case ROTATE_UP:
         {
             pev(eThwomp[THWOMP_ID], pev_angles, eThwomp[THWOMP_ANGLES])
-            eThwomp[THWOMP_ANGLES][1] -= g_eSettings[SETTING_ROTATION_STEP]
+            eThwomp[THWOMP_ANGLES][1] -= THWOMP_ROTATION_STEP
             if ( eThwomp[THWOMP_ANGLES][1] < -180.0 ) eThwomp[THWOMP_ANGLES][1] += 360.0
 
             set_pev(eThwomp[THWOMP_ID], pev_angles, eThwomp[THWOMP_ANGLES])
@@ -1248,7 +1211,7 @@ public menuHandlerRotate(id, menu, item)
         case ROTATE_DOWN:
         {
             pev(eThwomp[THWOMP_ID], pev_angles, eThwomp[THWOMP_ANGLES])
-            eThwomp[THWOMP_ANGLES][1] += g_eSettings[SETTING_ROTATION_STEP]
+            eThwomp[THWOMP_ANGLES][1] += THWOMP_ROTATION_STEP
             if ( eThwomp[THWOMP_ANGLES][1] > 180.0 ) eThwomp[THWOMP_ANGLES][1] -= 360.0
 
             set_pev(eThwomp[THWOMP_ID], pev_angles, eThwomp[THWOMP_ANGLES])
@@ -1393,7 +1356,7 @@ stock thwompCreate(id, iItem)
     {
         EnableAction(id)
         g_ePlayerData[id][PDATA_THWOMP_GHOST] = eThwomp[THWOMP_ID]
-        g_ePlayerData[id][PDATA_OFFSET] = g_eSettings[SETTING_OFFSET_BASE]
+        g_ePlayerData[id][PDATA_OFFSET] = THWOMP_OFFSET_BASE
 
         eThwomp[THWOMP_FLAGS] |= FLAG_GHOST
         eThwomp[THWOMP_SIZE] = g_ePlayerData[id][PDATA_ROTATE_SIZE]
@@ -1659,7 +1622,7 @@ public fwdStartFrame()
             if ( fOrigin[2] <= eThwomp[THWOMP_ORIGIN_END][2] + THWOMP_POINT_EPSILON )
             {
                 new szSound[MAX_RESOURCE_PATH_LENGTH]
-                ArrayGetString(eThwomp[THWOMP_SOUND_SMASH], random(ArraySize(eThwomp[THWOMP_SOUND_SMASH])), szSound, charsmax(szSound))
+                ArrayGetString(g_eSettings[SETTING_DEFAULT_SOUND_SMASH], random(ArraySize(g_eSettings[SETTING_DEFAULT_SOUND_SMASH])), szSound, charsmax(szSound))
                 engfunc(EngFunc_EmitSound, eThwomp[THWOMP_ID], CHAN_ITEM, szSound, VOL_NORM, ATTN_NORM, 0, PITCH_NORM)
 
                 eThwomp[THWOMP_FLAGS] &= ~FLAG_ANGRY
@@ -1708,7 +1671,7 @@ public fwdTouch(iEnt, iOther)
         && fOrigin[2] < fThwompOrigin[2] )
         {
             new szSound[MAX_RESOURCE_PATH_LENGTH]
-            ArrayGetString(eThwomp[THWOMP_SOUND_ALERT], random(ArraySize(eThwomp[THWOMP_SOUND_ALERT])), szSound, charsmax(szSound))
+            ArrayGetString(g_eSettings[SETTING_DEFAULT_SOUND_ALERT], random(ArraySize(g_eSettings[SETTING_DEFAULT_SOUND_ALERT])), szSound, charsmax(szSound))
             engfunc(EngFunc_EmitSound, eThwomp[THWOMP_ID], CHAN_ITEM, szSound, VOL_NORM, ATTN_NORM, 0, PITCH_NORM)
 
             eThwomp[THWOMP_FLAGS] |= FLAG_ANGRY
@@ -1742,14 +1705,14 @@ public fwdPreThink(id)
             {
                 if ( iButton & IN_ATTACK )
                 {
-                    g_ePlayerData[id][PDATA_OFFSET]      += g_eSettings[SETTING_OFFSET_STEP]
-                    g_ePlayerData[id][PDATA_OFFSET]      = floatclamp(g_ePlayerData[id][PDATA_OFFSET], g_eSettings[SETTING_OFFSET][0], g_eSettings[SETTING_OFFSET][1])
+                    g_ePlayerData[id][PDATA_OFFSET]      += THWOMP_OFFSET_STEP
+                    g_ePlayerData[id][PDATA_OFFSET]      = floatclamp(g_ePlayerData[id][PDATA_OFFSET], THWOMP_OFFSET_MIN, THWOMP_OFFSET_MAX)
                     g_ePlayerData[id][PDATA_NEXT_OFFSET] = fCurrentTime + 0.1
                 }
                 else if ( iButton & IN_ATTACK2 )
                 {
-                    g_ePlayerData[id][PDATA_OFFSET]      -= g_eSettings[SETTING_OFFSET_STEP]
-                    g_ePlayerData[id][PDATA_OFFSET]      = floatclamp(g_ePlayerData[id][PDATA_OFFSET], g_eSettings[SETTING_OFFSET][0], g_eSettings[SETTING_OFFSET][1])
+                    g_ePlayerData[id][PDATA_OFFSET]      -= THWOMP_OFFSET_STEP
+                    g_ePlayerData[id][PDATA_OFFSET]      = floatclamp(g_ePlayerData[id][PDATA_OFFSET], THWOMP_OFFSET_MIN, THWOMP_OFFSET_MAX)
                     g_ePlayerData[id][PDATA_NEXT_OFFSET] = fCurrentTime + 0.1
                 }
             }
@@ -1819,7 +1782,7 @@ stock thwompCheck(id)
     global_get(glb_v_forward, fVec2)
 
     iBest = -1
-    fBestDist = g_eSettings[SETTING_THWOMP_CHECK]
+    fBestDist = THWOMP_CHECK
     for ( new i = 0; i < g_iThwomp; i ++ )
     {
         ArrayGetArray(g_aThwomp, i, eThwomp)
@@ -2033,7 +1996,7 @@ stock thwompSelect(eThwomp[THWOMP], iAction)
     else if ( iAction == TARGET_GHOST )
     {
         iRender = kRenderTransAlpha
-        iRenderAmt = g_eSettings[SETTING_GHOST_ALPHA]
+        iRenderAmt = THWOMP_GHOST_ALPHA
     }
     else if ( iAction == TARGET_HIDE )
     {
@@ -2244,3 +2207,8 @@ stock LogConfigError(const iLine, const szText[], any:...)
 
     log_to_file(ERROR_FILE, "^nLine %d: %s", iLine, szError)
 }
+
+
+
+
+
