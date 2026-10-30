@@ -20,7 +20,6 @@
 
 #include <amxmodx>
 #include <amxmisc>
-#include <cstrike>
 #include <fakemeta>
 #include <hamsandwich>
 #include <xs>
@@ -1341,7 +1340,7 @@ public thwompTask()
 
 stock thwompCreate(id, iItem)
 {
-    new iEnt = cs_create_entity("info_target")
+    new iEnt = engfunc(EngFunc_CreateNamedEntity, engfunc(EngFunc_AllocString, "info_target"))
     if ( !pev_valid(iEnt) )
         return
 
@@ -1384,7 +1383,7 @@ stock thwompCreate(id, iItem)
 
 stock thwompCreateTrigger(eThwomp[THWOMP])
 {
-    new iTrigger = cs_create_entity("info_target")
+    new iTrigger = engfunc(EngFunc_CreateNamedEntity, engfunc(EngFunc_AllocString, "info_target"))
     if ( !pev_valid(iTrigger) )
     	return
 
@@ -1653,7 +1652,7 @@ public fwdTouch(iEnt, iOther)
     new eThwomp[THWOMP], iItem
     if ( (iItem = thwompGet(eThwomp, iThwomp)) == -1
     || !(eThwomp[THWOMP_FLAGS] & FLAG_ACTIVE)
-    || !(CsTeams:eThwomp[THWOMP_TEAM] & cs_get_user_team(iOther)) )
+    || !(eThwomp[THWOMP_TEAM] & get_user_team(iOther)) )
         return HAM_IGNORED
 
     new Float:fThwompOrigin[3], Float:fOrigin[3]
