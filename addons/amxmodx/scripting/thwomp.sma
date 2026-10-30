@@ -21,9 +21,7 @@
 #include <amxmodx>
 #include <amxmisc>
 #include <cstrike>
-#include <engine>
 #include <fakemeta>
-#include <fun>
 #include <hamsandwich>
 #include <xs>
 
@@ -172,7 +170,6 @@ enum _:THWOMP
     THWOMP_SIZE,
     THWOMP_TRIGGER,
     THWOMP_NAME[MAX_VALUE_LENGTH],
-    THWOMP_MODEL[MAX_RESOURCE_PATH_LENGTH],
 
     Float:THWOMP_ORIGIN_START[3],
     Float:THWOMP_ORIGIN_END[3],
@@ -314,8 +311,6 @@ new Array:g_aThwomp,
     g_iThwomp, g_iThwompConfig, g_iScreenShake,
     g_iMaxPlayers
 
-new const g_iColorActive[] = { 0, 255, 0 }
-new const g_iColorInactive[] = { 255, 0, 0 }
 new g_szRotateSize[][] = {"THWOMP_ROTATE_SMALL", "THWOMP_ROTATE_MEDIUM", "THWOMP_ROTATE_LARGE"}
 
 public plugin_init()
@@ -669,10 +664,10 @@ public menuRoot(id, iMenu)
 
     menu_addblank2(iMenu)
 
-    formatex(szItem, charsmax(szItem), "%L", id, "THWOMP_ROOT_NOCLIP", id, get_user_noclip(id) ? "THWOMP_ON" : "THWOMP_OFF")
+    formatex(szItem, charsmax(szItem), "%L", id, "THWOMP_ROOT_NOCLIP", id, (pev(id, pev_movetype) == MOVETYPE_NOCLIP) ? "THWOMP_ON" : "THWOMP_OFF")
     menu_additem(iMenu, szItem)
 
-    formatex(szItem, charsmax(szItem), "%L", id, "THWOMP_ROOT_GODMODE", id, get_user_godmode(id) ? "THWOMP_ON" : "THWOMP_OFF")
+    formatex(szItem, charsmax(szItem), "%L", id, "THWOMP_ROOT_GODMODE", id, (pev(id, pev_takedamage) == DAMAGE_NO) ? "THWOMP_ON" : "THWOMP_OFF")
     menu_additem(iMenu, szItem)
 }
 
@@ -1582,7 +1577,7 @@ stock LoadDataThwomp(iItem, iFlags, iSize, Float:fOrigin[3], Float:fAngles[3], i
 
 public thwompNoClip(id)
 {
-    set_user_noclip(id, !get_user_noclip(id))
+    set_pev(id, pev_movetype, pev(id, pev_movetype) == MOVETYPE_NOCLIP ? MOVETYPE_WALK : MOVETYPE_NOCLIP)
 
     thwompSound(id, SOUND_MENU_NAV)
     thwompMenu(id, MENU_ROOT)
@@ -1590,7 +1585,7 @@ public thwompNoClip(id)
 
 public thwompGodMode(id)
 {
-    set_user_godmode(id, !get_user_godmode(id))
+    set_pev(id, pev_takedamage, pev(id, pev_takedamage) == DAMAGE_NO ? DAMAGE_AIM : DAMAGE_NO)
 
     thwompSound(id, SOUND_MENU_NAV)
     thwompMenu(id, MENU_ROOT)
@@ -1988,8 +1983,8 @@ stock thwompSelect(eThwomp[THWOMP], iAction)
     iRenderFx = kRenderFxNone
     if ( iAction == TARGET_SELECT )
     {
-        if ( eThwomp[THWOMP_FLAGS] & FLAG_ACTIVE )  { iRenderColor[0] = g_iColorActive[0];      iRenderColor[1] = g_iColorActive[1];     iRenderColor[2] = g_iColorActive[2]; }
-        else                                        { iRenderColor[0] = g_iColorInactive[0];    iRenderColor[1] = g_iColorInactive[1];   iRenderColor[2] = g_iColorInactive[2]; }
+        if ( eThwomp[THWOMP_FLAGS] & FLAG_ACTIVE )  { iRenderColor[0] = 0;      iRenderColor[1] = 255;     iRenderColor[2] = 0; }
+        else                                        { iRenderColor[0] = 255;    iRenderColor[1] = 0;   iRenderColor[2] = 0; }
 
         iRender = kRenderTransColor
         iRenderFx = kRenderFxGlowShell
@@ -2011,7 +2006,7 @@ stock thwompSelect(eThwomp[THWOMP], iAction)
         iRenderAmt = 255
     }
 
-    set_ent_rendering(eThwomp[THWOMP_ID], iRenderFx, iRenderColor[0], iRenderColor[1], iRenderColor[2], iRender, iRenderAmt)
+    entitySetRendering(eThwomp[THWOMP_ID], iRenderFx, iRenderColor[0], iRenderColor[1], iRenderColor[2], iRender, iRenderAmt)
 }
 
 stock thwompSound(iEnt, iSound, bool:bPlayer = true)
@@ -2221,8 +2216,15 @@ stock LogConfigError(const iLine, const szText[], any:...)
 
     log_to_file(ERROR_FILE, "^nLine %d: %s", iLine, szError)
 }
+stock entitySetRendering(iEntity, iRenderFx, iRed, iGreen, iBlue, iRenderMode, iRenderAmt)
+{
+    new Float:fRenderColor[3]
+    fRenderColor[0] = float(iRed)
+    fRenderColor[1] = float(iGreen)
+    fRenderColor[2] = float(iBlue)
 
-
-
-
-
+    set_pev(iEntity, pev_renderfx, iRenderFx)
+    set_pev(iEntity, pev_rendercolor, fRenderColor)
+    set_pev(iEntity, pev_rendermode, iRenderMode)
+    set_pev(iEntity, pev_renderamt, float(iRenderAmt))
+}
