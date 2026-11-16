@@ -19,6 +19,10 @@ Thwomps can be placed, managed and configured during gameplay with runtime contr
 - Dynamic Thwomp rotation and natural ghost preview placement
 - Custom Thwomp setups are saved per map and automatically loaded on every map start
 
+## 📋 Requirements
+- ReGameDLL
+- AMX Mod X 1.10+
+
 ## 💬 Commands
 - `say /thwomp` - Opens the Thwomp menu.
 - `say_team /thwomp` - Opens the Thwomp menu.
