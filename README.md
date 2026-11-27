@@ -1,7 +1,7 @@
 <h1 align="center">Thwomp</h1>
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=GrLWfcWX9Io"><img src="https://img.youtube.com/vi/GrLWfcWX9Io/maxresdefault.jpg" alt="Watch on YouTube" width="600"></a>
+  <img src="images/demo.gif" alt="Thwomp">
 </p>
 
 ## 📝 Description
